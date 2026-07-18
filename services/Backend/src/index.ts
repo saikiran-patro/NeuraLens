@@ -1,16 +1,16 @@
-import "dotenv/config";
 import dotenv from "dotenv";
 import cors from "cors";
 import express from "express";
 import { randomUUID } from "node:crypto";
 import path from "node:path";
+import { existsSync } from "node:fs";
 import { WebSocket, WebSocketServer } from "ws";
 import { askAssistant, ProviderUnavailableError } from "./agents/assistant.js";
 import { getKnowledgePacks, knowledgeDocumentCount, loadKnowledge } from "./knowledge.js";
 import type { SuggestedAction } from "./types.js";
 import { searchWeb } from "./tools/webSearch.js";
 
-dotenv.config({ path: path.resolve(process.cwd(), "services/.env") });
+dotenv.config({ path: process.env.NEURALENS_ENV_FILE || path.resolve(process.cwd(), "services/.env") });
 
 const app = express();
 const port = Number(process.env.PORT || 8787);
@@ -81,6 +81,22 @@ app.post("/api/search", async (request, response, next) => {
   }
 });
 
+app.get("/api/downloads/windows", (_request, response) => {
+  const configured = process.env.NEURALENS_WINDOWS_INSTALLER;
+  const releaseDirectory = path.resolve(process.cwd(), "release");
+  const candidates = [
+    configured,
+    path.join(releaseDirectory, `NeuraLens-AI-Setup-${process.env.npm_package_version || "0.1.0"}.exe`),
+    path.join(releaseDirectory, "NeuraLens-AI-Setup.exe"),
+  ].filter((candidate): candidate is string => Boolean(candidate));
+  const installer = candidates.find((candidate) => existsSync(candidate));
+  if (!installer) {
+    response.status(404).json({ error: "The Windows installer is being prepared. Try again shortly." });
+    return;
+  }
+  response.download(installer, path.basename(installer));
+});
+
 const blockedPayloadKeys = ["password", "otp", "payment", "card", "cvv", "captcha"];
 app.post("/api/actions/confirm", (request, response) => {
   const { approved, action } = request.body as { approved?: boolean; action?: SuggestedAction };
@@ -100,6 +116,12 @@ app.post("/api/actions/confirm", (request, response) => {
   response.json({ status: "approved", message: `${action.label} was approved and logged.` });
 });
 
+const staticDirectory = process.env.NEURALENS_STATIC_DIR;
+if (staticDirectory && existsSync(staticDirectory)) {
+  app.use(express.static(staticDirectory));
+  app.get("*", (_request, response) => response.sendFile(path.join(staticDirectory, "index.html")));
+}
+
 app.use((error: unknown, _request: express.Request, response: express.Response, _next: express.NextFunction) => {
   console.error(error);
   if (error instanceof ProviderUnavailableError) {
@@ -109,6 +131,7 @@ app.use((error: unknown, _request: express.Request, response: express.Response, 
   response.status(500).json({ error: "NeuraLens AI encountered an unexpected error." });
 });
 
+async function startServer() {
 await loadKnowledge();
 const server = app.listen(port, () => {
   console.log(`NeuraLens AI API ready at http://localhost:${port}`);
@@ -176,4 +199,10 @@ voiceProxy.on("connection", (client) => {
   client.on("close", () => {
     if (upstream.readyState === WebSocket.OPEN || upstream.readyState === WebSocket.CONNECTING) upstream.close();
   });
+});
+}
+
+void startServer().catch((error) => {
+  console.error("NeuraLens AI API failed to start.", error);
+  process.exitCode = 1;
 });

@@ -1,6 +1,9 @@
 {
   "name": "neuralens",
   "version": "0.1.0",
+  "description": "NeuraLens AI voice-first screen intelligence for web and Windows.",
+  "author": "Sai Kiran",
+  "main": "services/Desktop/main.cjs",
   "private": true,
   "type": "module",
   "scripts": {
@@ -8,6 +11,9 @@
     "dev:client": "vite --host 0.0.0.0",
     "dev:server": "tsx watch services/Backend/src/index.ts",
     "build": "vite build",
+    "build:backend": "esbuild services/Backend/src/index.ts --bundle --platform=node --format=cjs --outfile=dist-desktop/backend/index.cjs",
+    "desktop": "npm run build && npm run build:backend && electron .",
+    "desktop:package": "npm run build && npm run build:backend && electron-builder --win nsis",
     "typecheck": "tsc --noEmit",
     "start": "tsx services/Backend/src/index.ts"
   },
@@ -24,6 +30,56 @@
     "tesseract.js": "^7.0.0",
     "ws": "^8.21.1"
   },
+  "build": {
+    "appId": "in.saikiran.neuralensai",
+    "productName": "NeuraLens AI",
+    "asar": true,
+    "directories": {
+      "output": "release",
+      "buildResources": "services/Desktop/assets"
+    },
+    "files": [
+      "services/Desktop/**/*",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "dist",
+        "to": "web"
+      },
+      {
+        "from": "dist-desktop/backend",
+        "to": "backend"
+      },
+      {
+        "from": "knowledge",
+        "to": "knowledge"
+      },
+      {
+        "from": "services/.env.example",
+        "to": "config/.env.example"
+      }
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "artifactName": "NeuraLens-AI-Setup-${version}.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "NeuraLens AI",
+      "deleteAppDataOnUninstall": false
+    }
+  },
   "devDependencies": {
     "@types/cors": "^2.8.17",
     "@types/express": "^5.0.0",
@@ -32,6 +88,9 @@
     "@types/react-dom": "^18.3.5",
     "@vitejs/plugin-react": "^4.3.4",
     "concurrently": "^9.1.2",
+    "electron": "^41.7.1",
+    "electron-builder": "^26.9.1",
+    "esbuild": "^0.28.1",
     "tsx": "^4.19.2",
     "typescript": "^5.7.2",
     "vite": "^6.0.7"

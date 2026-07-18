@@ -1,5 +1,9 @@
 node_modules/
 dist/
+dist-desktop/
+release/
+release-final/
+.electron-builder-cache/
 .env
 *.local
 *.log

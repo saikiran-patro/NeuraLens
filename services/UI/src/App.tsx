@@ -692,6 +692,11 @@ function App() {
 
   const screenAnalysisActive = Boolean(stream) && (assistantState === "thinking" || realtimeVoice.state === "thinking");
 
+  useEffect(() => {
+    window.neuralensDesktop?.setScreenShareState(Boolean(stream), screenAnalysisActive);
+    return () => window.neuralensDesktop?.setScreenShareState(false, false);
+  }, [stream, screenAnalysisActive]);
+
   return (
     <div className={`app-background theme-${theme} ${stream ? "screen-share-active" : ""} ${screenAnalysisActive ? "screen-share-analyzing" : ""}`}>
       {stream && <div className="screen-share-edge" aria-hidden="true" />}

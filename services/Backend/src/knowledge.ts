@@ -30,7 +30,7 @@ const PACKS: Record<string, { name: string; description: string; locked: boolean
   },
 };
 
-const knowledgeRoot = path.resolve(process.cwd(), "knowledge");
+const knowledgeRoot = process.env.NEURALENS_KNOWLEDGE_DIR || path.resolve(process.cwd(), "knowledge");
 let cache: KnowledgeChunk[] | null = null;
 
 function titleFromMarkdown(markdown: string, fallback: string) {
