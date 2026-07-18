@@ -45,7 +45,7 @@ Build the Windows installer:
 npm run desktop:package
 ```
 
-The installer is written to `release/NeuraLens-AI-Setup-<version>.exe`. The landing page's **Download for Windows** button downloads that file through `/api/downloads/windows`. In production, place the installer in `release/` beside the server or set `NEURALENS_WINDOWS_INSTALLER` to its absolute path.
+The installer is written to `release/NeuraLens-AI-Setup-<version>.exe`. The landing page's **Download for Windows** button uses `/api/downloads/windows`. Locally, this route serves the setup file from `release/`. In production, it redirects to the matching GitHub Release asset; set `NEURALENS_WINDOWS_INSTALLER_URL` to override that URL or `NEURALENS_WINDOWS_INSTALLER` to serve a specific local file.
 
 The packaged app never embeds API secrets. On first launch it creates `%APPDATA%\neuralens\.env` from `services/.env.example`; add the provider keys there for local voice and model access.
 

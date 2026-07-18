@@ -86,18 +86,28 @@ app.post("/api/search", async (request, response, next) => {
 
 app.get("/api/downloads/windows", (_request, response) => {
   const configured = process.env.NEURALENS_WINDOWS_INSTALLER;
+  const version = process.env.npm_package_version || "0.1.0";
   const releaseDirectory = path.resolve(process.cwd(), "release");
   const candidates = [
     configured,
-    path.join(releaseDirectory, `NeuraLens-AI-Setup-${process.env.npm_package_version || "0.1.0"}.exe`),
+    path.join(releaseDirectory, `NeuraLens-AI-Setup-${version}.exe`),
     path.join(releaseDirectory, "NeuraLens-AI-Setup.exe"),
   ].filter((candidate): candidate is string => Boolean(candidate));
   const installer = candidates.find((candidate) => existsSync(candidate));
-  if (!installer) {
-    response.status(404).json({ error: "The Windows installer is being prepared. Try again shortly." });
+  if (installer) {
+    response.download(installer, path.basename(installer));
     return;
   }
-  response.download(installer, path.basename(installer));
+
+  const remoteInstaller = process.env.NEURALENS_WINDOWS_INSTALLER_URL
+    || `https://github.com/saikiran-patro/NeuraLens/releases/download/v${version}/NeuraLens-AI-Setup-${version}.exe`;
+  try {
+    const downloadUrl = new URL(remoteInstaller);
+    if (downloadUrl.protocol !== "https:") throw new Error("Installer URL must use HTTPS.");
+    response.redirect(302, downloadUrl.toString());
+  } catch {
+    response.status(404).json({ error: "The Windows installer is being prepared. Try again shortly." });
+  }
 });
 
 const blockedPayloadKeys = ["password", "otp", "payment", "card", "cvv", "captcha"];
