@@ -1,0 +1,14 @@
+node_modules/
+dist/
+dist-desktop/
+release/
+release-*/
+.electron-builder-cache/
+.env
+*.local
+*.log
+.DS_Store
+coverage/
+services/.env
+services/UI/.env
+services/Backend/.env
