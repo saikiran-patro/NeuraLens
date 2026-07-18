@@ -431,6 +431,22 @@ function ActivityView({ timeline }: { timeline: TimelineItem[] }) {
 function SettingsView({ health, voiceOut, setVoiceOut, voiceInputStatus, theme, setTheme }: { health: HealthStatus; voiceOut: boolean; setVoiceOut: (value: boolean) => void; voiceInputStatus: string; theme: ThemeMode; setTheme: (theme: ThemeMode) => void }) {
   const [capture, setCapture] = useState(true);
   const [memory, setMemory] = useState(true);
+  const [deepgramKey, setDeepgramKey] = useState("");
+  const [configurationStatus, setConfigurationStatus] = useState("");
+  const [savingConfiguration, setSavingConfiguration] = useState(false);
+  const saveDeepgramConfiguration = async () => {
+    if (!window.neuralensDesktop) return;
+    setConfigurationStatus("");
+    setSavingConfiguration(true);
+    try {
+      await window.neuralensDesktop.configureDeepgram(deepgramKey);
+      setDeepgramKey("");
+      setConfigurationStatus("Saved securely. NeuraLens AI is restartingâ€¦");
+    } catch (error) {
+      setConfigurationStatus(error instanceof Error ? error.message : "The Deepgram key could not be saved.");
+      setSavingConfiguration(false);
+    }
+  };
   return (
     <div className="settings-view view-enter">
       <div className="view-title-row"><div><span className="eyebrow">Your preferences</span><h1>Settings</h1><p>Control intelligence, voice, capture, and local privacy.</p></div></div>
@@ -453,6 +469,17 @@ function SettingsView({ health, voiceOut, setVoiceOut, voiceInputStatus, theme, 
           <div className="setting-row"><div><strong>Deepgram voice agent</strong><p>Natural listening, managed reasoning, expressive speech, and private screen context</p></div><span className="status-value"><i className={health.voiceProvider === "deepgram" ? "online" : ""} />{health.voiceProvider === "deepgram" ? "Configured" : "Not configured"}</span></div>
           <div className="setting-row"><div><strong>Voice models</strong><p>Selected from your local environment</p></div><span className="model-value">{health.voiceModel || "Unavailable"}</span></div>
           <div className="setting-note"><LockKeyhole size={15} /><span>Long-lived API keys stay server-side. Voice sessions receive a short-lived NeuraLens AI proxy token.</span></div>
+          {window.neuralensDesktop && (
+            <div className="desktop-key-setup">
+              <label htmlFor="deepgram-desktop-key">{health.voiceProvider === "deepgram" ? "Update Deepgram API key" : "Connect Deepgram voice"}</label>
+              <p>Your key stays in this Windows account and is never placed in the web interface or installer.</p>
+              <div>
+                <input id="deepgram-desktop-key" type="password" value={deepgramKey} onChange={(event) => setDeepgramKey(event.target.value)} placeholder="Paste your Deepgram API key" autoComplete="off" spellCheck={false} />
+                <button className="primary-button" onClick={() => void saveDeepgramConfiguration()} disabled={savingConfiguration || deepgramKey.trim().length < 20}>{savingConfiguration ? "Savingâ€¦" : "Save & restart"}</button>
+              </div>
+              {configurationStatus && <span className="desktop-configuration-status">{configurationStatus}</span>}
+            </div>
+          )}
         </section>
         <section className="settings-section glass">
           <div className="settings-section-title"><span><Volume2 size={18} /></span><div><h2>Voice</h2><p>Input and spoken responses</p></div></div>
@@ -631,10 +658,19 @@ function App() {
     const screenshotBase64 = captureFrame();
     setMessages((items) => [...items, { id: newId("message"), role: "user", text: userText, createdAt: nowLabel() }]);
     addTimeline("question", "You asked NeuraLens AI", userText);
-    if (screenshotBase64) addTimeline("screen", "Screen frame analyzed", "One ephemeral frame was attached to this request.");
+    let screenMarkdown: string | undefined;
+    if (screenshotBase64) {
+      addTimeline("screen", "Screen frame analyzed", "One ephemeral frame was attached to this request.");
+      try {
+        const { recognizeScreen } = await import("./tools/screenOcr");
+        screenMarkdown = (await recognizeScreen(screenshotBase64)).markdown;
+      } catch {
+        // A live model can still use the shared frame if local screen reading is unavailable.
+      }
+    }
 
     try {
-      const response = await api.ask({ sessionId, userText, screenshotBase64, mode });
+      const response = await api.ask({ sessionId, userText, screenshotBase64, screenMarkdown, mode });
       setMessages((items) => [...items, { id: newId("message"), role: "assistant", text: response.answer, response, createdAt: nowLabel() }]);
       setLastAnalyzed(nowLabel());
       if (response.sources.length) addTimeline("knowledge", "Knowledge retrieved", response.sources.map((source) => source.title).join(", "));
@@ -647,7 +683,15 @@ function App() {
     }
   };
 
-  const toggleListening = () => voiceActive ? realtimeVoice.stop() : realtimeVoice.start();
+  const toggleListening = () => {
+    if (voiceActive) return realtimeVoice.stop();
+    if (health.voiceProvider !== "deepgram") {
+      setError("Deepgram voice is not configured. Add your API key in Settings.");
+      setView("settings");
+      return;
+    }
+    return realtimeVoice.start();
+  };
 
   const openApproval = (action: SuggestedAction) => {
     setPendingAction(action);

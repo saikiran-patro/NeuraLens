@@ -1,6 +1,6 @@
 const { app, BrowserWindow, desktopCapturer, ipcMain, screen, session, shell } = require("electron");
 const { spawn } = require("node:child_process");
-const { appendFileSync, copyFileSync, existsSync } = require("node:fs");
+const { appendFileSync, copyFileSync, existsSync, readFileSync, writeFileSync } = require("node:fs");
 const net = require("node:net");
 const path = require("node:path");
 
@@ -30,6 +30,16 @@ function ensureUserEnvironment() {
   const template = path.join(process.resourcesPath, "config", ".env.example");
   if (!existsSync(environmentFile) && existsSync(template)) copyFileSync(template, environmentFile);
   return environmentFile;
+}
+
+function updateEnvironmentValue(file, name, value) {
+  const current = existsSync(file) ? readFileSync(file, "utf8") : "";
+  const lines = current.split(/\r?\n/);
+  const index = lines.findIndex((line) => line.startsWith(`${name}=`));
+  const entry = `${name}=${value}`;
+  if (index >= 0) lines[index] = entry;
+  else lines.push(entry);
+  writeFileSync(file, `${lines.filter((line, lineIndex) => line || lineIndex < lines.length - 1).join("\n")}\n`, { encoding: "utf8", mode: 0o600 });
 }
 
 async function startBackend() {
@@ -156,6 +166,20 @@ ipcMain.on("screen-share-state", (event, state) => {
   sharingActive = Boolean(state?.active);
   if (sharingActive) showSharingOverlays(Boolean(state?.analyzing));
   else closeOverlays();
+});
+
+ipcMain.handle("configure-deepgram", (event, suppliedKey) => {
+  if (!event.sender.getURL().startsWith(localOrigin)) throw new Error("Configuration request was rejected.");
+  const apiKey = String(suppliedKey || "").trim();
+  if (apiKey.length < 20 || /^(your|replace|change|example|placeholder)/i.test(apiKey)) {
+    throw new Error("Enter a valid Deepgram API key.");
+  }
+  updateEnvironmentValue(ensureUserEnvironment(), "DEEPGRAM_API_KEY", apiKey);
+  setTimeout(() => {
+    app.relaunch();
+    app.quit();
+  }, 700);
+  return { ok: true };
 });
 
 const hasLock = app.requestSingleInstanceLock();

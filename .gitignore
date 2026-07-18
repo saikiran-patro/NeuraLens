@@ -2,7 +2,7 @@ node_modules/
 dist/
 dist-desktop/
 release/
-release-final/
+release-*/
 .electron-builder-cache/
 .env
 *.local

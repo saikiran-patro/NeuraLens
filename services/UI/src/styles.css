@@ -347,6 +347,13 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .model-value { max-width: 165px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .locked-value { padding: 5px 7px; border-radius: 7px; background: rgba(38,42,46,.055); }
 .setting-note { margin-top: 13px; padding: 10px; display: flex; align-items: flex-start; gap: 7px; border-radius: 10px; color: #777c81; background: rgba(37,41,45,.045); font-size: 8px; line-height: 1.45; }.setting-note svg { flex: 0 0 auto; }.setting-note code { color: #4f5459; }
+.desktop-key-setup { margin-top: 13px; padding-top: 13px; border-top: 1px solid var(--soft-line); }
+.desktop-key-setup label { display: block; font-size: 9px; font-weight: 700; }
+.desktop-key-setup > p { margin: 4px 0 10px; color: #8d9297; font-size: 8px; line-height: 1.45; }
+.desktop-key-setup > div { display: flex; gap: 8px; }
+.desktop-key-setup input { min-width: 0; flex: 1; height: 38px; padding: 0 11px; border: 1px solid rgba(31,35,39,.12); border-radius: 11px; color: var(--text); background: rgba(255,255,255,.5); outline: none; font: inherit; font-size: 9px; }
+.desktop-key-setup input:focus { border-color: rgba(65,127,203,.52); box-shadow: 0 0 0 3px rgba(65,127,203,.09); }
+.desktop-configuration-status { display: block; margin-top: 8px; color: #6c7278; font-size: 8px; }
 .appearance-section { min-height: 180px; }
 .theme-picker { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 18px; }
 .theme-picker button { min-width: 0; height: 58px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; border: 1px solid rgba(32,36,41,.09); border-radius: 12px; color: #777d83; background: rgba(255,255,255,.35); transition: .2s ease; }

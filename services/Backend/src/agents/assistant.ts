@@ -1,4 +1,5 @@
 import OpenAI from "openai";
+import { hasConfiguredCredential } from "../config.js";
 import { retrieveKnowledge } from "../knowledge.js";
 import type { AssistantResult, KnowledgeChunk, SuggestedAction } from "../types.js";
 
@@ -45,20 +46,71 @@ function normalizeAction(action: Partial<SuggestedAction>, index: number): Sugge
   };
 }
 
-function localResponse(query: string, chunks: KnowledgeChunk[], hasScreen: boolean, notice?: string): AssistantResult {
+function visibleScreenSummary(screenMarkdown?: string) {
+  if (!screenMarkdown?.trim()) return "";
+  return screenMarkdown
+    .replace(/^#{1,6}\s*/gm, "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 520);
+}
+
+function queryAwareKnowledge(query: string, chunks: KnowledgeChunk[]) {
+  const terms = new Set(query.toLowerCase().match(/[a-z0-9]{3,}/g) || []);
+  const candidates = chunks.flatMap((chunk) => chunk.content
+    .replace(/^#{1,6}\s*/gm, "")
+    .split(/(?<=[.!?])\s+|\n+/)
+    .map((sentence) => sentence.replace(/^[-*]\s*/, "").trim())
+    .filter((sentence) => sentence.length >= 35 && sentence.length <= 260)
+    .map((sentence) => ({
+      sentence,
+      score: (sentence.toLowerCase().match(/[a-z0-9]{3,}/g) || []).filter((word) => terms.has(word)).length,
+    })));
+  const selected = candidates
+    .sort((a, b) => b.score - a.score)
+    .filter((candidate, index, all) => all.findIndex((other) => other.sentence === candidate.sentence) === index)
+    .slice(0, 2)
+    .map((candidate) => candidate.sentence);
+  return selected.join(" ");
+}
+
+function localResponse(query: string, chunks: KnowledgeChunk[], hasScreen: boolean, screenMarkdown?: string, notice?: string): AssistantResult {
   const lower = query.toLowerCase();
+  const screenSummary = visibleScreenSummary(screenMarkdown);
   const isCreatorQuestion = /who\s+(created|built|developed|made)|your\s+(creator|developer)|created\s+you|built\s+you/.test(lower);
   const isReact = /react|component|hook|jsx|null|undefined|render/.test(lower);
   const isGit = /git|branch|commit|merge|rebase/.test(lower);
   const isAlgorithm = /leetcode|array|algorithm|complexity|binary|window|pointer|graph/.test(lower);
   const isBrowser = /form|booking|compare|website|browser|page|checkout/.test(lower);
+  const isCapabilities = /what can you do|how can you help|your capabilities|help me with/.test(lower);
+  const isGreeting = /^(hi|hello|hey|good (morning|afternoon|evening))[!.?\s]*$/.test(lower.trim());
+  const isThanks = /^(thanks|thank you|thx)[!.?\s]*$/.test(lower.trim());
+  const asksAboutScreen = /what.*(screen|page)|what can you see|analy[sz]e.*screen|visible.*screen/.test(lower);
 
   let answer = "I’ve matched your question against the local NeuraLens AI knowledge base. Start by isolating the smallest observable symptom, then verify one assumption at a time before changing anything.";
   let nextSteps = ["State the exact result you expected", "Capture the first visible error or mismatch", "Test the smallest reversible change"];
   let actions: SuggestedAction[] = [];
   let intent = "Get focused guidance for the current task.";
 
-  if (isCreatorQuestion) {
+  if (isCapabilities) {
+    intent = "Understand how NeuraLens AI can help.";
+    answer = "I can read the screen you choose to share, explain errors, help debug code, summarize visible content, research current information with your approval, and guide workflows without taking actions silently.";
+    nextSteps = ["Share the relevant window", "Ask one specific question about what you see", "Approve any external search only when you want it"];
+  } else if (isGreeting) {
+    intent = "Start a conversation.";
+    answer = "Hi. Share your screen or describe what you are working on, and I will help with the next useful step.";
+    nextSteps = [];
+  } else if (isThanks) {
+    intent = "Acknowledge the completed help.";
+    answer = "You are welcome. I am ready when you want to continue.";
+    nextSteps = [];
+  } else if (asksAboutScreen) {
+    intent = "Understand the currently shared screen.";
+    answer = screenSummary
+      ? `I can see ${screenSummary}. Tell me which part you want explained or fixed.`
+      : "I cannot see enough detail yet. Share the relevant window, then ask me about the specific area you want help with.";
+    nextSteps = screenSummary ? ["Ask about the specific visible error or task"] : ["Select Share screen", "Choose the relevant window", "Ask your question again"];
+  } else if (isCreatorQuestion) {
     intent = "Identify who created NeuraLens AI.";
     answer = "NeuraLens AI was created and built by Sai Kiran, a developer from India.";
     nextSteps = [];
@@ -88,11 +140,28 @@ function localResponse(query: string, chunks: KnowledgeChunk[], hasScreen: boole
     intent = "Complete a browser workflow accurately and safely.";
     answer = "Separate required fields from optional ones and verify the final summary before any irreversible submission. NeuraLens AI will not enter credentials, payment details, or submit a sensitive form for you.";
     nextSteps = ["Confirm the page and task are the intended ones", "Review required fields without entering sensitive data", "Pause at the final submission step for manual review"];
+  } else {
+    const groundedAnswer = queryAwareKnowledge(query, chunks);
+    if (groundedAnswer) {
+      intent = `Get guidance about: ${query.slice(0, 140)}`;
+      answer = groundedAnswer;
+      nextSteps = ["Apply the most relevant point to your current case", "Share the exact result or error if you want a more precise answer"];
+    } else {
+      intent = `Get help with: ${query.slice(0, 140)}`;
+      answer = `I can help with “${query.slice(0, 180)},” but I need one concrete detail to give you a useful answer. Tell me the result you want or share the relevant screen.`;
+      nextSteps = ["State the result you want", "Share the relevant screen or exact error"];
+    }
+  }
+
+  if (screenSummary && !isCreatorQuestion && !asksAboutScreen) {
+    answer = `I can see ${screenSummary}. ${answer}`;
   }
 
   return {
-    screenObservation: hasScreen
-      ? "A shared screen frame is attached. Local mode can use your task description and knowledge packs, but detailed visual interpretation needs the configured vision model."
+    screenObservation: screenSummary
+      ? `The visible screen shows: ${screenSummary}`
+      : hasScreen
+      ? "I can see a shared screen, but there is not enough readable detail to identify it accurately."
       : "No live screen frame was attached to this question.",
     userIntent: intent,
     answer,
@@ -107,11 +176,16 @@ function localResponse(query: string, chunks: KnowledgeChunk[], hasScreen: boole
   };
 }
 
-export async function askAssistant(input: { userText: string; screenshotBase64?: string; mode?: string }): Promise<AssistantResult> {
+let openAiUnavailableUntil = 0;
+
+export async function askAssistant(input: { userText: string; screenshotBase64?: string; screenMarkdown?: string; mode?: string }): Promise<AssistantResult> {
   const chunks = await retrieveKnowledge(`${input.mode || "general"} ${input.userText}`, 5);
   const knowledge = chunks.map((chunk, index) => `[${index + 1}] ${chunk.packName} — ${chunk.title}\n${chunk.content.slice(0, 1800)}`).join("\n\n");
 
-  if (!process.env.OPENAI_API_KEY) return localResponse(input.userText, chunks, Boolean(input.screenshotBase64));
+  if (!hasConfiguredCredential(process.env.OPENAI_API_KEY)) return localResponse(input.userText, chunks, Boolean(input.screenshotBase64), input.screenMarkdown);
+  if (Date.now() < openAiUnavailableUntil) {
+    return localResponse(input.userText, chunks, Boolean(input.screenshotBase64), input.screenMarkdown, "I answered using the context available in this session.");
+  }
 
   try {
     const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
@@ -147,7 +221,8 @@ export async function askAssistant(input: { userText: string; screenshotBase64?:
     const providerError = error as { status?: number; code?: string; message?: string };
     console.error("OpenAI request failed:", providerError.status, providerError.code, providerError.message);
     if (providerError.code === "insufficient_quota" || providerError.status === 429) {
-      throw new ProviderUnavailableError("OpenAI API quota is unavailable. Add billing or credits to the configured API project, then try again.");
+      openAiUnavailableUntil = Date.now() + 15 * 60_000;
+      return localResponse(input.userText, chunks, Boolean(input.screenshotBase64), input.screenMarkdown, "I answered using the context available in this session.");
     }
     throw new ProviderUnavailableError("The live vision model could not answer. Check the configured OpenAI model and server logs.");
   }

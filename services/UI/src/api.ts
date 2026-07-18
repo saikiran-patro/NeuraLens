@@ -21,7 +21,7 @@ export const api = {
     }
     return response.text();
   },
-  ask: (payload: { sessionId: string; userText: string; screenshotBase64?: string; mode: string }) =>
+  ask: (payload: { sessionId: string; userText: string; screenshotBase64?: string; screenMarkdown?: string; mode: string }) =>
     request<AssistantResponse>("/api/assistant/ask", {
       method: "POST",
       body: JSON.stringify({ ...payload, allowActions: true }),

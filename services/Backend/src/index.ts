@@ -9,6 +9,7 @@ import { askAssistant, ProviderUnavailableError } from "./agents/assistant.js";
 import { getKnowledgePacks, knowledgeDocumentCount, loadKnowledge } from "./knowledge.js";
 import type { SuggestedAction } from "./types.js";
 import { searchWeb } from "./tools/webSearch.js";
+import { hasConfiguredCredential } from "./config.js";
 
 dotenv.config({ path: process.env.NEURALENS_ENV_FILE || path.resolve(process.cwd(), "services/.env") });
 
@@ -22,20 +23,22 @@ const deepgramThinkModel = () => process.env.DEEPGRAM_THINK_MODEL || "gpt-5.4-mi
 const deepgramVoiceModel = () => process.env.DEEPGRAM_VOICE_MODEL || "aura-2-vesta-en";
 
 app.get("/api/health", async (_request, response) => {
+  const openAiConfigured = hasConfiguredCredential(process.env.OPENAI_API_KEY);
+  const deepgramConfigured = hasConfiguredCredential(process.env.DEEPGRAM_API_KEY);
   response.json({
     status: "ready",
-    provider: process.env.OPENAI_API_KEY ? "openai" : "local",
-    model: process.env.OPENAI_API_KEY ? process.env.OPENAI_MODEL || "gpt-5.6-luna" : "Local hybrid retrieval",
-    voiceProvider: process.env.DEEPGRAM_API_KEY ? "deepgram" : "unavailable",
-    voiceModel: process.env.DEEPGRAM_API_KEY ? `${deepgramThinkModel()} + ${deepgramVoiceModel()}` : "Unavailable",
+    provider: openAiConfigured ? "openai" : "local",
+    model: openAiConfigured ? process.env.OPENAI_MODEL || "gpt-5.6-luna" : "Local hybrid retrieval",
+    voiceProvider: deepgramConfigured ? "deepgram" : "unavailable",
+    voiceModel: deepgramConfigured ? `${deepgramThinkModel()} + ${deepgramVoiceModel()}` : "Unavailable",
     knowledgeDocuments: await knowledgeDocumentCount(),
   });
 });
 
 const voiceTokens = new Map<string, number>();
 app.post("/api/deepgram/token", (_request, response) => {
-  if (!process.env.DEEPGRAM_API_KEY) {
-    response.status(503).json({ error: "Configure DEEPGRAM_API_KEY to start the voice agent." });
+  if (!hasConfiguredCredential(process.env.DEEPGRAM_API_KEY)) {
+    response.status(503).json({ error: "Deepgram voice is not configured. Open Settings and add your Deepgram API key." });
     return;
   }
   const token = randomUUID();
@@ -53,7 +56,7 @@ app.get("/api/knowledge/packs", async (_request, response, next) => {
 
 app.post("/api/assistant/ask", async (request, response, next) => {
   try {
-    const { userText, screenshotBase64, mode } = request.body || {};
+    const { userText, screenshotBase64, screenMarkdown, mode } = request.body || {};
     if (typeof userText !== "string" || !userText.trim()) {
       response.status(400).json({ error: "Tell NeuraLens AI what you want help with." });
       return;
@@ -62,7 +65,7 @@ app.post("/api/assistant/ask", async (request, response, next) => {
       response.status(400).json({ error: "Please shorten the request to under 6,000 characters." });
       return;
     }
-    response.json(await askAssistant({ userText: userText.trim(), screenshotBase64, mode }));
+    response.json(await askAssistant({ userText: userText.trim(), screenshotBase64, screenMarkdown: typeof screenMarkdown === "string" ? screenMarkdown.slice(0, 10_000) : undefined, mode }));
   } catch (error) {
     next(error);
   }

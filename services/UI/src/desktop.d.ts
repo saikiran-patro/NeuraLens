@@ -6,6 +6,7 @@ declare global {
       isDesktop: boolean;
       platform: string;
       setScreenShareState: (active: boolean, analyzing?: boolean) => void;
+      configureDeepgram: (apiKey: string) => Promise<{ ok: boolean }>;
     };
   }
 }
