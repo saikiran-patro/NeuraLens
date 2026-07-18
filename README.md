@@ -27,17 +27,38 @@ npm install
 npm run dev
 ```
 
-Open [http://localhost:5173](http://localhost:5173). The API runs on [http://localhost:8787](http://localhost:8787).
+Open [http://localhost:5173](http://localhost:5173) for the product landing page. Select **Try now** or open [http://localhost:5173/app](http://localhost:5173/app) for the web application. The API runs on [http://localhost:8787](http://localhost:8787).
 
 Copy `services/.env.example` to `services/.env` and add a Deepgram API key; add an OpenAI key only if you also want typed multimodal requests. Tavily is optional because web search has a keyless Bing fallback. Long-lived keys remain in the server process. The browser receives a short-lived NeuraLens AI proxy token, while the server authenticates the upstream Deepgram WebSocket. Start screen sharing, then select the microphone button to open the persistent voice session.
+
+## Windows desktop app
+
+Run the desktop app in development mode:
+
+```bash
+npm run desktop
+```
+
+Build the Windows installer:
+
+```bash
+npm run desktop:package
+```
+
+The installer is written to `release/NeuraLens-AI-Setup-<version>.exe`. The landing page's **Download for Windows** button downloads that file through `/api/downloads/windows`. In production, place the installer in `release/` beside the server or set `NEURALENS_WINDOWS_INSTALLER` to its absolute path.
+
+The packaged app never embeds API secrets. On first launch it creates `%APPDATA%\neuralens\.env` from `services/.env.example`; add the provider keys there for local voice and model access.
 
 ## Useful commands
 
 ```bash
 npm run typecheck
 npm run build
+npm run build:backend
 npm run dev:server
 npm run dev:client
+npm run desktop
+npm run desktop:package
 ```
 
 ## Project map
