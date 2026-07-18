@@ -129,7 +129,9 @@ app.post("/api/actions/confirm", (request, response) => {
   response.json({ status: "approved", message: `${action.label} was approved and logged.` });
 });
 
-const staticDirectory = process.env.NEURALENS_STATIC_DIR;
+const staticDirectory = process.env.NEURALENS_STATIC_DIR
+  ? path.resolve(process.env.NEURALENS_STATIC_DIR)
+  : undefined;
 if (staticDirectory && existsSync(staticDirectory)) {
   app.use(express.static(staticDirectory));
   app.get("*", (_request, response) => response.sendFile(path.join(staticDirectory, "index.html")));
